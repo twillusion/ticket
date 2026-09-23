@@ -19,11 +19,16 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from ticket.config import StubHubConfig
 
-_BLOCK_MARKERS = (
-    "px-captcha", "captcha-delivery", "access denied", "please verify you are a human",
-    "are you a robot", "pardon our interruption", "request unsuccessful",
+# Challenge detection. Bare vendor names ("perimeterx", "datadome", "captcha-delivery") are NOT
+# used: their sensor scripts are included on normal pages too, which caused false "blocked"
+# results. Only an actual challenge frame/element, or challenge text visible on the page, counts.
+_CHALLENGE_FRAME_MARKERS = ("captcha-delivery.com/captcha", "captcha-delivery.com/interstitial")
+_CHALLENGE_HTML_MARKERS = ('id="px-captcha"', "id='px-captcha'")
+_CHALLENGE_TEXT_MARKERS = (
+    "verify you are a human", "verify you are human", "are you a robot", "access denied",
+    "pardon our interruption", "request unsuccessful", "press & hold", "press and hold",
+    "slide right to", "unusual activity",
 )
-# Not "perimeterx" or "datadome": their sensor scripts load on normal pages too.
 
 
 class Blocked(Exception):
@@ -46,14 +51,32 @@ def with_quantity(url: str, quantity: int) -> str:
     return urlunsplit(parts._replace(query=urlencode(q)))
 
 
-def detect_block(status: int | None, html: str) -> str | None:
-    lowered = html.lower()
-    for marker in _BLOCK_MARKERS:
-        if marker in lowered:
-            return f"challenge page detected (marker: {marker!r})"
+def detect_block(status: int | None, html: str, visible_text: str = "",
+                 frame_urls: list[str] | tuple[str, ...] = ()) -> str | None:
+    for u in frame_urls:
+        for m in _CHALLENGE_FRAME_MARKERS:
+            if m in u:
+                return f"challenge frame on page ({m})"
+    lowered_html = html.lower()
+    for m in _CHALLENGE_HTML_MARKERS:
+        if m in lowered_html:
+            return f"challenge element on page ({m})"
+    lowered_text = visible_text.lower()
+    for m in _CHALLENGE_TEXT_MARKERS:
+        if m in lowered_text:
+            return f"challenge text on page ({m!r})"
     if status is not None and status >= 400:
         return f"event page returned HTTP {status}"
     return None
+
+
+def _check_block(page, status: int | None) -> tuple[str, str | None]:
+    html = page.content()
+    try:
+        text = page.inner_text("body", timeout=5_000)
+    except Exception:
+        text = ""
+    return html, detect_block(status, html, text, [f.url for f in page.frames])
 
 
 _EMBEDDED_JS = """
@@ -82,7 +105,10 @@ def _load_more(page, max_rounds: int, notes: list[str]) -> None:
 
 
 def capture_event(cfg: StubHubConfig, raw_dir: Path, *, executable_path: str | None = None,
-                  url_override: str | None = None, allowed_host_suffix: str = "stubhub.com") -> Capture:
+                  url_override: str | None = None, allowed_host_suffix: str = "stubhub.com",
+                  wait_for_me: bool = False) -> Capture:
+    """wait_for_me: if a challenge appears in a visible window, pause so a person can solve it
+    by hand, then continue. The tool itself never interacts with the challenge."""
     from playwright.sync_api import TimeoutError as PWTimeout
     from playwright.sync_api import sync_playwright
 
@@ -108,9 +134,22 @@ def capture_event(cfg: StubHubConfig, raw_dir: Path, *, executable_path: str | N
             except PWTimeout:
                 cap.notes.append("networkidle not reached in 30s (continuing)")
 
-            html = page.content()
+            html, block = _check_block(page, cap.page_status)
+            if block and wait_for_me and not cfg.headless:
+                page.screenshot(path=str(raw_dir / "blocked-before-human.png"), full_page=True)
+                print(f"\n  StubHub is showing a check: {block}\n"
+                      "  Solve it in the Chrome window, wait until the ticket listings appear,\n"
+                      "  then press Enter here (Ctrl+C to give up).", flush=True)
+                input()
+                try:
+                    page.wait_for_load_state("networkidle", timeout=30_000)
+                except PWTimeout:
+                    cap.notes.append("networkidle not reached after manual check (continuing)")
+                # The first response's status is stale after the check; judge the page as it is now.
+                html, block = _check_block(page, None)
+                if not block:
+                    cap.notes.append("a bot check was solved by hand during this run")
             (raw_dir / "page.html").write_text(html, encoding="utf-8")
-            block = detect_block(cap.page_status, html)
             if block:
                 page.screenshot(path=str(raw_dir / "blocked.png"), full_page=True)
                 raise Blocked(block)

@@ -28,9 +28,11 @@ def cmd_probe(args) -> int:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     raw_dir = sources.raw_dir / "stubhub" / f"probe-{stamp}"
     try:
-        cap = capture_event(sources.stubhub, raw_dir)
+        cap = capture_event(sources.stubhub, raw_dir, wait_for_me=args.wait_for_me)
     except Blocked as e:
         print(f"BLOCKED: {e}\nScreenshot and page HTML saved in {raw_dir}", file=sys.stderr)
+        if not args.wait_for_me:
+            print("Try: python -m ticket stubhub probe --wait-for-me  (solve the check by hand)", file=sys.stderr)
         return 2
 
     print(f"Page: {cap.page_url}  HTTP {cap.page_status}")
@@ -68,7 +70,8 @@ def cmd_collect(args) -> int:
     from ticket.stubhub.collect import run
 
     sources = load_sources()
-    out = run(sources, reparse_dir=Path(args.reparse) if args.reparse else None)
+    out = run(sources, reparse_dir=Path(args.reparse) if args.reparse else None,
+              **({"wait_for_me": True} if args.wait_for_me and not args.reparse else {}))
     print(f"[stubhub] {out.run_id}: {out.status.upper()} - {out.message}")
     if out.result:
         for e in out.result.errors[:10]:
@@ -149,9 +152,13 @@ def main(argv: list[str] | None = None) -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
 
     sh = sub.add_parser("stubhub", help="StubHub collector").add_subparsers(dest="action", required=True)
-    sh.add_parser("probe", help="load the page, save raw captures, print what was found; stores nothing")
+    pr = sh.add_parser("probe", help="load the page, save raw captures, print what was found; stores nothing")
+    pr.add_argument("--wait-for-me", action="store_true",
+                    help="if StubHub shows a bot check, pause so you can solve it in the window")
     c = sh.add_parser("collect", help="capture and store one snapshot")
     c.add_argument("--reparse", metavar="RAW_DIR", help="re-parse a saved raw folder instead of scraping")
+    c.add_argument("--wait-for-me", action="store_true",
+                   help="if StubHub shows a bot check, pause so you can solve it (not for scheduled runs)")
 
     sub.add_parser("status", help="summarize the latest runs and prices")
 

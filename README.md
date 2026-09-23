@@ -51,9 +51,11 @@ python -m ticket status              # latest runs, cheapest pair per tier, flag
 ```
 
 - `collect` exits non-zero on `blocked` / `empty` / `error`, so a scheduler can see failures.
-- If StubHub shows a captcha, the run is recorded as **blocked** with a screenshot. Solve it
-  once by hand in the Chrome window if you like (the profile in `data/browser-profile` keeps
-  cookies), but the tool never tries to get past it itself.
+- If StubHub shows a bot check, the run is recorded as **blocked** with a screenshot. To get
+  past it by hand, run `python -m ticket stubhub probe --wait-for-me` (also works on `collect`).
+  The window stays open, you solve the check, press Enter, and the run continues. The cookie is
+  kept in `data/browser-profile`, so later runs may pass on their own for a while. The tool
+  itself never touches the check.
 - Parser fixes don't need a new scrape: `python -m ticket stubhub collect --reparse data/raw/stubhub/<run>`.
 
 ## Tests

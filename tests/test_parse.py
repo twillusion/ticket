@@ -77,3 +77,17 @@ def test_missing_id_gets_content_hash_and_issue():
     listing, issues = map_listing({"section": "16", "row": "1", "price": "S$100"}, 2, EVENT)
     assert listing.listing_id.startswith("h:")
     assert any("content hash" in i for i in issues)
+
+
+def test_detect_block_ignores_vendor_scripts_on_normal_pages():
+    from ticket.stubhub.fetch import detect_block
+    normal = '<html><script src="https://ct.captcha-delivery.com/c.js"></script><script src="https://js.datadome.co/tags.js"></script><div>Section 16 S$3,917</div></html>'
+    assert detect_block(200, normal, "Section 16 S$3,917", ["https://www.stubhub.com/x"]) is None
+
+
+def test_detect_block_real_challenges():
+    from ticket.stubhub.fetch import detect_block
+    assert detect_block(200, "<html></html>", "", ["https://geo.captcha-delivery.com/captcha/?initialCid=x"])
+    assert detect_block(200, '<div id="px-captcha"></div>', "")
+    assert detect_block(200, "<html></html>", "Please verify you are a human")
+    assert detect_block(403, "<html></html>", "")
