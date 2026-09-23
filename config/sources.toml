@@ -1,0 +1,19 @@
+# Where to collect from. Paths are relative to the repo root.
+
+[storage]
+db_path = "data/prices.sqlite"
+raw_dir = "data/raw"            # every run's raw captures land here, one folder per run
+
+[stubhub]
+event_url = "https://www.stubhub.com/league-of-legends-world-championship-brooklyn-tickets-11-14-2026/event/161251368"
+quantity = 2                    # ask StubHub for listings buyable as exactly 2
+# StubHub's bot protection is much harder on headless browsers. Leave this false unless
+# headless runs are confirmed to work on your machine.
+headless = false
+# Use your installed Google Chrome instead of Playwright's Chromium ("chrome"), or "" for
+# Playwright's bundled Chromium. Real Chrome tends to get blocked less.
+browser_channel = "chrome"
+# Persistent browser profile, so cookies survive between runs (gitignored).
+profile_dir = "data/browser-profile"
+# How many times to scroll / click "Show more" to load additional listings.
+max_load_more = 15

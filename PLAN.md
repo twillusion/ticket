@@ -161,8 +161,8 @@ collector (Python + Playwright, cron on your machine)
 | # | Deliverable | Depends on |
 |---|---|---|
 | M0 | Repo skeleton + this plan | done |
-| M1 | `config/sections.toml` (draft done) + SQLite schema | stage orientation confirmed |
-| M2 | StubHub collector, run manually, writes snapshots | runs on your machine |
+| M1 | `config/sections.toml` + SQLite schema | done (tiers can change any time) |
+| M2 | StubHub collector, run manually, writes snapshots | **built; needs a `probe` on your machine** to check the real JSON format |
 | M3 | Static site: chart + cheapest table + health panel | M2 |
 | M4 | 闲鱼 collector + review table for unparsed listings | logged-in session, keyword list, sample listings |
 | M5 | Scheduled runs on your computer | M3, your OS |

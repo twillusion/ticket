@@ -1,9 +1,12 @@
 [project]
 name = "ticket"
-version = "0.0.1"
+version = "0.1.0"
 description = "Resale price tracker for LoL Worlds 2026 Final, front-of-stage seats only"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = ["playwright>=1.45"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -11,3 +14,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
