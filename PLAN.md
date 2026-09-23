@@ -72,11 +72,35 @@ as "front" by default.
 | Source | Access | Structured section/row? | Difficulty | Notes |
 |---|---|---|---|---|
 | **StubHub** | No public buyer API. Event page loads listings through internal JSON calls | Yes | Medium | Heavy bot protection. Plan: headless Chromium (Playwright), low frequency (every 1–3 h), read the listings JSON the page itself fetches instead of parsing HTML. Against ToS, so expect breakage and possibly blocked accounts |
-| **闲鱼 / Goofish** | App-first. Web search needs login; signed `mtop` requests; slider captchas | **No**, free text | High | I'd **not** automate this at first. Start with manual entry (paste a listing URL + price + your reading of the seat). Automate later only if it's worth it |
+| **闲鱼 / Goofish** | App-first. Web search needs login; signed `mtop` requests; slider captchas | **No**, free text | High | Automate search with a logged-in browser session (see §3a). Parsing the free text is the hard part |
 | SeatGeek | Public platform API exists, but it only returns event-level stats (lowest/avg price), not per section | Event-level only | Low | Could be a cheap "market overall" line, but it can't answer the front-of-stage question |
 | Vivid Seats / TickPick / TM resale | Similar to StubHub | Yes | Medium | Add later if StubHub alone is too thin |
 
-Recommendation: **StubHub automated + 闲鱼 manual** for v1.
+Recommendation: **StubHub and 闲鱼 both automated**, with 闲鱼 falling back to one-click capture
+if its anti-bot checks (风控) make automation unworkable.
+
+### 3a. 闲鱼 collector
+
+- **Session:** Playwright with a *headed* login once (scan the QR code with the 闲鱼 app), saved
+  to a local `storage_state.json` (gitignored). Use a secondary account if possible: 风控 can
+  restrict an account that searches too often.
+- **Search:** fixed keyword list, every 2–4 h, first few result pages only. Read the search
+  JSON the page itself receives instead of parsing HTML.
+- **Captcha / login expired:** the collector **stops and goes red** on the health panel with
+  "re-login needed". No captcha solving, no retries in a loop.
+- **Parsing free text** into section / row / quantity / price:
+  1. Regex pass for the common patterns (`16区`, `Sec 16`, `116`, `2张`, `连座`, `内场`).
+  2. Anything the regex can't fully resolve is marked `needs_review` and shown in a review table
+     on the site with the original text and a link. It is never put into a tier on a guess.
+  3. Optional later: LLM extraction for the leftovers (needs an API key; costs a little).
+- **Price traps:** placeholder prices (¥1, ¥9999, 私聊 / 面议), per-ticket vs per-pair
+  ambiguity, and "代抢" (grab-for-you services, not actual tickets). Detected and excluded
+  with a reason, not silently dropped.
+- **Fallback: one-click capture.** A bookmarklet that sends the 闲鱼 listing you're viewing
+  (title, price, description, URL) to the local database. More work for you, but no 风控 risk.
+
+Prior art worth reading before building: open-source 闲鱼 monitors built on Playwright plus a
+saved login session (e.g. `ai-goofish-monitor` on GitHub). Not verified from this environment.
 
 ### Environment constraint (already hit)
 
@@ -108,7 +132,7 @@ collector (Python + Playwright, cron on your machine)
      A scrape that returns 0 listings or fails to parse shows as **red**, never as "no data".
 - **Event markers on the chart:** semifinal results (who made the final) will move prices more
   than anything else. Mark them on the time series so price jumps can be explained.
-- **Alerts (later):** notify when a pair in a tracked tier drops below a threshold you set.
+- **No alerts.** Not wanted; the chart is the deliverable.
 
 ## 5. Data pitfalls to handle explicitly
 
@@ -140,20 +164,21 @@ collector (Python + Playwright, cron on your machine)
 | M1 | `config/sections.toml` (draft done) + SQLite schema | stage orientation confirmed |
 | M2 | StubHub collector, run manually, writes snapshots | runs on your machine |
 | M3 | Static site: chart + cheapest table + health panel | M2 |
-| M4 | 闲鱼 manual-entry path (CLI or small form) | M1 |
-| M5 | Scheduled runs + price alert | M3 |
+| M4 | 闲鱼 collector + review table for unparsed listings | logged-in session, keyword list, sample listings |
+| M5 | Scheduled runs on your computer | M3, your OS |
 
 M1–M3 is the useful core. Everything after that is optional.
 
 ## 7. Open questions
 
 Answered: Final only. 2 tickets together. Seat map provided. Floor excluded (no listings anyway). Sections split
-into best / good / far.
+into best / good / far. No price alert, but a price-over-time chart. 闲鱼 automated, not manual.
+Runs on your computer (tentatively).
 
 1. **Stage orientation:** still unconfirmed (see §2). Decision: **favor 15/16/17 anyway**.
    It's a straight-on view under both a center stage (TM map) and a Modelo-end stage. It's
    only bad under StubHub's layout, which the TM map contradicts.
 2. **Loge boxes (A18–A48) and Baseline Club** inside the circled area: currently excluded. Track them?
-3. **Price ceiling / alert threshold**, if any (in SGD?).
-4. **闲鱼:** is manual entry acceptable for v1?
-5. **Where will this run?** Your laptop on a cron job is the realistic answer, given bot protection.
+3. **闲鱼 inputs:** search keywords, 5–10 sample listings, and an account to use (see §3a).
+4. **Your computer's OS** (sets up scheduling: Task Scheduler vs cron/launchd).
+5. **Display currency:** SGD for everything?
