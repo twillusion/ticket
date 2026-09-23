@@ -24,8 +24,8 @@ def _fees_label(v) -> str:
 
 
 def cmd_probe(args) -> int:
+    from ticket.stubhub.collect import extract_all
     from ticket.stubhub.fetch import Blocked, capture_event
-    from ticket.stubhub.parse import extract
 
     sources = load_sources()
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -68,8 +68,21 @@ def cmd_probe(args) -> int:
     for f in cap.json_failures:
         print(f"  ! {f}")
 
-    res = extract(cap.docs, sources.stubhub.quantity, sources.stubhub.event_url)
-    print(f"\n[5] Listing-like arrays found: {len(res.candidates)}")
+    fee_lines = [ln for ln in lines if "fee" in ln.lower()][:10]
+    print(f"\n[5] Page text mentioning fees: {len(fee_lines)}")
+    for ln in fee_lines:
+        print(f"      | {ln[:140]}")
+
+    print(f"\n[6] Listing cards read from the page: {len(cap.cards)}")
+    for c in cap.cards[:3]:
+        print(f"  - label {c['label']!r}  href {str(c['href'])[:100]}")
+        print(f"      lines:  {c['lines'][:14]}")
+        print(f"      prices: {[(p['text'], 'STRUCK' if p['struck'] else 'live', 'shown' if p['visible'] else 'hidden') for p in c['prices']]}")
+        print(f"      data-*: {json.dumps(c['data_attrs'], ensure_ascii=False)[:400]}")
+        print(f"      html:   {c['html'][:700]}")
+
+    res, method = extract_all(cap.docs, cap.cards, sources.stubhub.quantity, sources.stubhub.event_url)
+    print(f"\n[7] Listing-like JSON arrays: {len(res.candidates)}   (listings taken from: {method})")
     for c in res.candidates:
         print(f"  - {c.count} items at {c.path}\n      from {c.source_url[:120]}\n      keys: {c.sample_keys}")
         print("      sample: " + json.dumps(c.sample, ensure_ascii=False)[:1500])
@@ -81,7 +94,7 @@ def cmd_probe(args) -> int:
         print(f"      price fields seen: {json.dumps(l.price_candidates, ensure_ascii=False)[:300]}")
     for e in res.errors[:20]:
         print(f"  ! {e}")
-    if not res.candidates:
+    if not res.listings:
         print("\nNOTHING FOUND in the captured data. Paste this whole output to Claude; also look at\n"
               f"page.png in {raw_dir}: are ticket listings visible, or is something (a pop-up,\n"
               "a quantity picker, a queue page) in the way?")

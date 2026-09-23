@@ -19,6 +19,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from ticket.config import StubHubConfig
 from ticket.jsonscan import json_in_script
+from ticket.stubhub.dom import CARDS_JS, CLICK_MORE_JS, COUNT_CARDS_JS, SCROLL_LIST_JS
 
 # Challenge detection. Bare vendor names ("perimeterx", "datadome", "captcha-delivery") are NOT
 # used: their sensor scripts are included on normal pages too, which caused false "blocked"
@@ -49,6 +50,7 @@ class Capture:
     body_text: str = ""
     network: list[dict] = field(default_factory=list)   # xhr/fetch requests
     scripts: list[dict] = field(default_factory=list)   # inline scripts summary
+    cards: list[dict] = field(default_factory=list)     # listing cards read from the DOM
 
 
 def with_quantity(url: str, quantity: int) -> str:
@@ -116,20 +118,21 @@ def _harvest_scripts(scripts: list[dict], cap: "Capture") -> None:
 
 
 def _load_more(page, max_rounds: int, notes: list[str]) -> None:
-    button = page.get_by_role("button", name=re.compile(r"show more|load more|see more", re.I))
-    clicks = 0
+    """Scroll the listing panel (and click any "show more") until the card count stops growing."""
+    counts = [page.evaluate(COUNT_CARDS_JS)]
+    clicks = stalls = 0
     for _ in range(max_rounds):
-        page.mouse.wheel(0, 5000)
-        page.wait_for_timeout(1200)
-        try:
-            if button.first.is_visible(timeout=500):
-                button.first.click(timeout=3000)
-                clicks += 1
-                page.wait_for_timeout(1500)
-        except Exception as e:  # a missing/detached button is normal; record it and move on
-            notes.append(f"load-more: {type(e).__name__}")
+        page.evaluate(SCROLL_LIST_JS)
+        if page.evaluate(CLICK_MORE_JS):
+            clicks += 1
+        page.wait_for_timeout(1800)
+        counts.append(page.evaluate(COUNT_CARDS_JS))
+        stalls = stalls + 1 if counts[-1] <= counts[-2] else 0
+        if stalls >= 2:
             break
-    notes.append(f"load-more clicks: {clicks}")
+    notes.append(f"section labels on page while scrolling: {counts}; show-more clicks: {clicks}")
+    if len(counts) - 1 >= max_rounds and stalls < 2:
+        notes.append(f"still growing after {max_rounds} rounds; raise max_load_more to get the rest")
 
 
 def capture_event(cfg: StubHubConfig, raw_dir: Path, *, executable_path: str | None = None,
@@ -157,9 +160,9 @@ def capture_event(cfg: StubHubConfig, raw_dir: Path, *, executable_path: str | N
             main = page.goto(url, wait_until="domcontentloaded", timeout=60_000)
             cap = Capture(page_url=page.url, page_status=main.status if main else None)
             try:
-                page.wait_for_load_state("networkidle", timeout=30_000)
+                page.wait_for_load_state("networkidle", timeout=15_000)
             except PWTimeout:
-                cap.notes.append("networkidle not reached in 30s (continuing)")
+                cap.notes.append("networkidle not reached in 15s (normal with analytics; continuing)")
 
             html, block = _check_block(page, cap.page_status)
             if block and wait_for_me and not cfg.headless:
@@ -195,6 +198,7 @@ def capture_event(cfg: StubHubConfig, raw_dir: Path, *, executable_path: str | N
             (raw_dir / "body.txt").write_text(cap.body_text, encoding="utf-8")
 
             _harvest_scripts(page.evaluate(_INLINE_SCRIPTS_JS), cap)
+            cap.cards = page.evaluate(CARDS_JS)
 
             # Every XHR/fetch response from any host, whatever its content type: sites don't
             # always label JSON as JSON. Analytics noise is filtered out later by the parser.
@@ -221,6 +225,7 @@ def capture_event(cfg: StubHubConfig, raw_dir: Path, *, executable_path: str | N
         finally:
             ctx.close()
 
+    (raw_dir / "cards.json").write_text(json.dumps(cap.cards, ensure_ascii=False, indent=1), encoding="utf-8")
     with (raw_dir / "responses.jsonl").open("w", encoding="utf-8") as f:
         for src, doc in cap.docs:
             f.write(json.dumps({"source": src, "json": doc}, ensure_ascii=False) + "\n")
