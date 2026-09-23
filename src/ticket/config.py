@@ -56,9 +56,18 @@ def load_sources() -> Sources:
             browser_channel=sh.get("browser_channel", ""),
             profile_dir=REPO_ROOT / sh["profile_dir"],
             max_load_more=int(sh["max_load_more"]),
-            views=tuple(_views(sh.get("views", []))),
+            views=tuple(_views(sh.get("views", []) + _generated_views())),
         ),
     )
+
+
+def _generated_views() -> list[dict]:
+    """Views written by `python -m ticket stubhub setup-views` (config/stubhub_views.toml)."""
+    path = CONFIG_DIR / "stubhub_views.toml"
+    if not path.exists():
+        return []
+    with path.open("rb") as f:
+        return tomllib.load(f).get("views", [])
 
 
 def _views(raw: list[dict]) -> list[tuple[str, str]]:

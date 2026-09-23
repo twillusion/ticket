@@ -201,6 +201,8 @@ def main(argv: list[str] | None = None) -> int:
     pr.add_argument("--wait-for-me", action="store_true",
                     help="if StubHub shows a bot check, pause so you can solve it in the window")
     pr.add_argument("--view", help="only probe this configured view")
+    sv = sh.add_parser("setup-views", help="guided: filter StubHub per tier in the window, check it, save the links")
+    sv.add_argument("--tier", action="append", choices=TIERS, help="only (re)do this tier; repeatable")
     c = sh.add_parser("collect", help="capture and store one snapshot")
     c.add_argument("--reparse", metavar="RAW_DIR", help="re-parse a saved raw folder instead of scraping")
     c.add_argument("--wait-for-me", action="store_true",
@@ -210,5 +212,8 @@ def main(argv: list[str] | None = None) -> int:
 
     args = p.parse_args(argv)
     if args.cmd == "stubhub":
+        if args.action == "setup-views":
+            from ticket.stubhub.setup_views import run_wizard
+            return run_wizard(load_sources(), only=args.tier)
         return cmd_probe(args) if args.action == "probe" else cmd_collect(args)
     return cmd_status(args)

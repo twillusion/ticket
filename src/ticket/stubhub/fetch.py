@@ -135,6 +135,18 @@ def _load_more(page, max_rounds: int, notes: list[str]) -> None:
         notes.append(f"still growing after {max_rounds} rounds; raise max_load_more to get the rest")
 
 
+def launch_context(p, cfg: StubHubConfig, executable_path: str | None = None, headless: bool | None = None):
+    """Chrome with the tool's persistent profile, so cookies from earlier runs are reused."""
+    launch: dict[str, Any] = {"headless": cfg.headless if headless is None else headless,
+                              "viewport": {"width": 1366, "height": 900}}
+    if executable_path:
+        launch["executable_path"] = executable_path
+    elif cfg.browser_channel:
+        launch["channel"] = cfg.browser_channel
+    cfg.profile_dir.mkdir(parents=True, exist_ok=True)
+    return p.chromium.launch_persistent_context(str(cfg.profile_dir), **launch)
+
+
 def capture_event(cfg: StubHubConfig, raw_dir: Path, *, executable_path: str | None = None,
                   url_override: str | None = None, wait_for_me: bool = False) -> Capture:
     """wait_for_me: if a challenge appears in a visible window, pause so a person can solve it
@@ -147,13 +159,7 @@ def capture_event(cfg: StubHubConfig, raw_dir: Path, *, executable_path: str | N
     responses = []
 
     with sync_playwright() as p:
-        launch: dict[str, Any] = {"headless": cfg.headless, "viewport": {"width": 1366, "height": 900}}
-        if executable_path:
-            launch["executable_path"] = executable_path
-        elif cfg.browser_channel:
-            launch["channel"] = cfg.browser_channel
-        cfg.profile_dir.mkdir(parents=True, exist_ok=True)
-        ctx = p.chromium.launch_persistent_context(str(cfg.profile_dir), **launch)
+        ctx = launch_context(p, cfg, executable_path)
         try:
             page = ctx.new_page()
             page.on("response", lambda r: responses.append(r))

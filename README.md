@@ -47,9 +47,17 @@ is used.
 
 StubHub shows only ~10 listings per page load, and blocked the "show more" request in testing.
 So instead of paging, the tool loads a few **filtered views**: one per tier, with those sections
-selected on StubHub's map and sorted by price. How to set one up is in
-[`config/sources.toml`](config/sources.toml). Probe a single view with
-`python -m ticket stubhub probe --view best`.
+selected on StubHub's map and sorted by price. Set them up with the guided command:
+
+```bash
+python -m ticket stubhub setup-views            # all three tiers
+python -m ticket stubhub setup-views --tier best
+```
+
+For each tier it opens the event, tells you which sections to click and to sort by lowest
+price, and waits for Enter. It then checks the result (URL changed, only that tier's sections
+listed, lowest price first) and saves passing tiers to `config/stubhub_views.toml`. Probe a
+single saved view with `python -m ticket stubhub probe --view best`.
 
 ## Collect and check
 
