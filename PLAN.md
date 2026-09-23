@@ -36,6 +36,22 @@ floor listings and none in 1/31/3/4/203/204/228/229) suggests that drawing is a 
 template and the real stage is at the Modelo Bridge end. The config header records this. It
 needs checking against Riot's or Ticketmaster's own map.
 
+Research on 2026-09-23 found **no published stage layout** from Riot, Barclays or any press
+coverage. This dev container is also blocked from reaching Ticketmaster, StubHub, SeatGeek,
+Vivid Seats, TickPick, Barclays and lolesports, so none of their event maps have been checked.
+Ways to verify, cheapest first:
+
+1. **Ticketmaster event map** (primary seller). Its map comes from the venue's manifest for
+   this event, so it's more likely to be real than a reseller template.
+2. **Compare reseller maps** (StubHub / SeatGeek / Vivid / TickPick). If they put the stage in
+   different places, they're templates.
+3. **View disclosures in listings.** Sellers and Ticketmaster add notes like "limited view",
+   "side view" or "obstructed". The collector keeps these per listing (`view_notes`). If they
+   pile up in 15/16/17, that end is behind the stage.
+4. **Inventory pattern over time.** Sections that never show listings were probably not sold.
+   This is weak evidence on its own.
+5. Ask Barclays box office / Riot Player Support directly.
+
 A listing whose section **isn't in the map** doesn't get dropped quietly. It's stored as
 `unclassified` and shown in its own banner on the site until someone classifies it. The same
 goes for 闲鱼 listings that can't be tied to a section: they're kept and flagged, never treated
@@ -70,7 +86,7 @@ collector (Python + Playwright, cron on your machine)
 
 - **Python.** You both already use it. Playwright for StubHub; no framework.
 - **SQLite.** One `listings_snapshot` table:
-  `source, listing_id, seen_at, section_raw, section, tier(best/good/far/excluded/unclassified), row, quantity, price_per_ticket, price_includes_fees (bool), currency, url, raw_json`.
+  `source, listing_id, seen_at, section_raw, section, tier(best/good/far/excluded/unclassified), row, quantity, price_per_ticket, price_includes_fees (bool), currency, view_notes, url, raw_json`.
   Keep `raw_json` so a later parser fix can be re-run over history.
 - **Site.** One static page, no server:
   1. Time series of the min and median **per-ticket, all-in** price, one line per tier (best / good / far).
