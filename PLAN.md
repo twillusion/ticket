@@ -86,11 +86,11 @@ collector (Python + Playwright, cron on your machine)
 
 - **Python.** You both already use it. Playwright for StubHub; no framework.
 - **SQLite.** One `listings_snapshot` table:
-  `source, listing_id, seen_at, section_raw, section, tier(best/good/far/excluded/unclassified), row, quantity, price_per_ticket, price_includes_fees (bool), currency, view_notes, url, raw_json`.
+  `source, listing_id, seen_at, section_raw, section, tier(best/good/far/excluded/unclassified), row, quantity, allowed_splits, price_per_ticket, price_includes_fees (bool), currency, view_notes, url, raw_json`.
   Keep `raw_json` so a later parser fix can be re-run over history.
 - **Site.** One static page, no server:
-  1. Time series of the min and median **per-ticket, all-in** price, one line per tier (best / good / far).
-  2. Table of current cheapest listings per tier with a link out.
+  1. Time series of the min and median **all-in price for 2 seats together**, one line per tier (best / good / far).
+  2. Table of current cheapest buyable pairs per tier with a link out.
   3. Health panel: last successful scrape per source, listings found, count of `unclassified`.
      A scrape that returns 0 listings or fails to parse shows as **red**, never as "no data".
 - **Alerts (later):** notify when a front listing drops below a threshold you set.
@@ -101,8 +101,10 @@ collector (Python + Playwright, cron on your machine)
   Record which one we got. Never mix them on one chart without saying so.
 - **Currency:** your StubHub session shows **SGD**; 闲鱼 is CNY. Store the original currency and convert only at display time, with
   the FX rate and date shown.
-- **Quantity/splits:** a "$900" listing might be one ticket out of a pair that won't split.
-  Filter by the quantity you actually want to buy.
+- **Quantity/splits: buying 2, seated together.** A listing counts only if you can buy
+  exactly 2 from it: `quantity >= 2` and the seller's split rules allow 2. Listings of 3 that
+  won't split to 2 are out. Charts show the **all-in total for the pair**, not the headline
+  per-ticket price. A listing with unknown split rules is kept but flagged, not assumed OK.
 - **Stale/fake listings:** 闲鱼 especially. Treat as indicative prices, not a market.
 - **Ticket delivery:** Ticketmaster mobile transfer. A 闲鱼 seller in China needs a TM account
   that can transfer to a US TM account. That's a buying-risk issue, but it's a reason to label
@@ -123,12 +125,11 @@ M1–M3 is the useful core. Everything after that is optional.
 
 ## 7. Open questions
 
-Answered: Final only. Seat map provided. Floor excluded (no listings anyway). Sections split
+Answered: Final only. 2 tickets together. Seat map provided. Floor excluded (no listings anyway). Sections split
 into best / good / far.
 
 1. **Stage orientation:** does the real stage face the 15/16/17 end? (See §2.)
 2. **Loge boxes (A18–A48) and Baseline Club** inside the circled area: currently excluded. Track them?
-3. **Quantity:** 1 ticket, or 2+ seated together?
-4. **Price ceiling / alert threshold**, if any (in SGD?).
-5. **闲鱼:** is manual entry acceptable for v1?
-6. **Where will this run?** Your laptop on a cron job is the realistic answer, given bot protection.
+3. **Price ceiling / alert threshold**, if any (in SGD?).
+4. **闲鱼:** is manual entry acceptable for v1?
+5. **Where will this run?** Your laptop on a cron job is the realistic answer, given bot protection.
