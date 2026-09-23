@@ -106,7 +106,9 @@ collector (Python + Playwright, cron on your machine)
   2. Table of current cheapest buyable pairs per tier with a link out.
   3. Health panel: last successful scrape per source, listings found, count of `unclassified`.
      A scrape that returns 0 listings or fails to parse shows as **red**, never as "no data".
-- **Alerts (later):** notify when a front listing drops below a threshold you set.
+- **Event markers on the chart:** semifinal results (who made the final) will move prices more
+  than anything else. Mark them on the time series so price jumps can be explained.
+- **Alerts (later):** notify when a pair in a tracked tier drops below a threshold you set.
 
 ## 5. Data pitfalls to handle explicitly
 
@@ -119,6 +121,13 @@ collector (Python + Playwright, cron on your machine)
   won't split to 2 are out. Charts show the **all-in total for the pair**, not the headline
   per-ticket price. A listing with unknown split rules is kept but flagged, not assumed OK.
 - **Stale/fake listings:** 闲鱼 especially. Treat as indicative prices, not a market.
+- **Buyer protection:** Ticketmaster has no primary tickets on sale, so resale is the only
+  route. Buy only through a platform that guarantees delivery and refunds a no-show (StubHub,
+  SeatGeek, Vivid Seats, TM resale). 闲鱼 gives no real protection for a cross-border TM
+  transfer. Its prices are a reference, not a place to buy.
+- **Late primary releases:** venues often release held-back tickets once the stage is
+  finalised, sometimes days before the event, and at face value. Worth a manual check of the
+  TM event page every few days. Automating it is optional (same bot-protection issue as StubHub).
 - **Ticket delivery:** Ticketmaster mobile transfer. A 闲鱼 seller in China needs a TM account
   that can transfer to a US TM account. That's a buying-risk issue, but it's a reason to label
   闲鱼 prices separately and not blend them with StubHub.
@@ -141,7 +150,9 @@ M1–M3 is the useful core. Everything after that is optional.
 Answered: Final only. 2 tickets together. Seat map provided. Floor excluded (no listings anyway). Sections split
 into best / good / far.
 
-1. **Stage orientation:** does the real stage face the 15/16/17 end? (See §2.)
+1. **Stage orientation:** still unconfirmed (see §2). Decision: **favor 15/16/17 anyway**.
+   It's a straight-on view under both a center stage (TM map) and a Modelo-end stage. It's
+   only bad under StubHub's layout, which the TM map contradicts.
 2. **Loge boxes (A18–A48) and Baseline Club** inside the circled area: currently excluded. Track them?
 3. **Price ceiling / alert threshold**, if any (in SGD?).
 4. **闲鱼:** is manual entry acceptable for v1?
