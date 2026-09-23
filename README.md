@@ -9,14 +9,19 @@ Status: **StubHub collector built, not yet run against the real site.** No websi
 
 ## Setup (your computer)
 
-Needs Python 3.11+ and Google Chrome.
+Needs Python 3.11+, Git and Google Chrome. Every command below runs **inside the `ticket`
+folder**, with the virtual environment active (your prompt starts with `(.venv)`).
 
 ```bash
+git clone -b claude/lucid-faraday-dcwuz3 https://github.com/twillusion/ticket.git
+cd ticket
 python -m venv .venv
+# Windows, Command Prompt:
+.venv\Scripts\activate.bat
+# Windows, PowerShell:
+.venv\Scripts\Activate.ps1
 # macOS / Linux:
 source .venv/bin/activate
-# Windows (PowerShell):
-.venv\Scripts\Activate.ps1
 
 pip install -e ".[dev]"
 python -m playwright install chromium   # only needed if you set browser_channel = "" in sources.toml
