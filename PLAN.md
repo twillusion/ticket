@@ -38,9 +38,13 @@ needs checking against Riot's or Ticketmaster's own map.
 
 **Update 2026-09-23: two maps, two layouts.** A second map
 ([`docs/seatmap-centerstage-2026-09-23.png`](docs/seatmap-centerstage-2026-09-23.png)) shows a
-**center stage** with no floor seating, and carries a "general layout, may vary" disclaimer.
-StubHub shows an end stage. They contradict each other, so neither is evidence of Riot's
-real setup. The one thing they agree on: **no floor seats are sold.**
+**center stage** with no floor seating. It comes from the **Ticketmaster event page** (static
+"Seat Map" panel) and carries a "general layout, may vary without notice" disclaimer.
+StubHub shows an end stage with a runway. Ticketmaster is the primary seller, so its map
+counts for more, but the disclaimer means it isn't confirmation. Both agree that
+**no floor seats are sold.** If the stage really is in the center, the long sides
+(7/8/9, 23/24/25) are closest and 15/16/17 is an end. Which side counts as "front" would then
+depend on which way the player booths face, which is also unknown.
 
 Research on 2026-09-23 found **no published stage layout** from Riot, Barclays or any press
 coverage. This dev container is also blocked from reaching Ticketmaster, StubHub, SeatGeek,
