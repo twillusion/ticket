@@ -1,0 +1,13 @@
+[project]
+name = "ticket"
+version = "0.0.1"
+description = "Resale price tracker for LoL Worlds 2026 Final, front-of-stage seats only"
+requires-python = ">=3.11"
+dependencies = []
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
