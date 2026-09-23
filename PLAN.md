@@ -71,7 +71,7 @@ as "front" by default.
 
 | Source | Access | Structured section/row? | Difficulty | Notes |
 |---|---|---|---|---|
-| **StubHub** | No public buyer API. Event page loads listings through internal JSON calls | Yes | Medium | Heavy bot protection. Plan: headless Chromium (Playwright), low frequency (every 1–3 h), read the listings JSON the page itself fetches instead of parsing HTML. Against ToS, so expect breakage and possibly blocked accounts |
+| **StubHub** | No public buyer API. Event page loads listings through internal JSON calls | Yes | Medium | Heavy bot protection. Built: real Chrome window via Playwright (headed, persistent profile), low frequency (every 1–3 h), read the listings JSON the page itself fetches instead of parsing HTML. Against ToS, so expect breakage and possibly blocked accounts |
 | **闲鱼 / Goofish** | App-first. Web search needs login; signed `mtop` requests; slider captchas | **No**, free text | High | Automate search with a logged-in browser session (see §3a). Parsing the free text is the hard part |
 | SeatGeek | Public platform API exists, but it only returns event-level stats (lowest/avg price), not per section | Event-level only | Low | Could be a cheap "market overall" line, but it can't answer the front-of-stage question |
 | Vivid Seats / TickPick / TM resale | Similar to StubHub | Yes | Medium | Add later if StubHub alone is too thin |
