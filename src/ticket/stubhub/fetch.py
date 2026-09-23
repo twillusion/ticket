@@ -18,6 +18,7 @@ from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from ticket.config import StubHubConfig
+from ticket.jsonscan import json_in_script
 
 # Challenge detection. Bare vendor names ("perimeterx", "datadome", "captcha-delivery") are NOT
 # used: their sensor scripts are included on normal pages too, which caused false "blocked"
@@ -42,6 +43,12 @@ class Capture:
     docs: list[tuple[str, Any]] = field(default_factory=list)   # (url, json)
     json_failures: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    # diagnostics, so a probe can show where the data lives without anyone opening files
+    title: str = ""
+    html_len: int = 0
+    body_text: str = ""
+    network: list[dict] = field(default_factory=list)   # xhr/fetch requests
+    scripts: list[dict] = field(default_factory=list)   # inline scripts summary
 
 
 def with_quantity(url: str, quantity: int) -> str:
@@ -79,12 +86,33 @@ def _check_block(page, status: int | None) -> tuple[str, str | None]:
     return html, detect_block(status, html, text, [f.url for f in page.frames])
 
 
-_EMBEDDED_JS = """
-() => Array.from(document.querySelectorAll('script')).filter(s => {
-  const t = (s.type || '').toLowerCase();
-  return t.includes('json') || s.id === '__NEXT_DATA__';
-}).map(s => ({id: s.id || null, type: s.type || null, text: s.textContent || ''}))
+_INLINE_SCRIPTS_JS = """
+() => Array.from(document.querySelectorAll('script:not([src])'))
+  .map(s => ({id: s.id || null, type: s.type || null, text: s.textContent || ''}))
 """
+_HINT_WORDS = ("listing", "section", "row", "price", "quantity", "ticket")
+_MAX_BODY = 20 * 1024 * 1024
+
+
+def _harvest_scripts(scripts: list[dict], cap: "Capture") -> None:
+    for i, s in enumerate(scripts):
+        text, stype = s["text"], (s["type"] or "").lower()
+        label = f"script[{i}]#{s['id'] or '?'}[{s['type'] or 'js'}]"
+        lowered = text.lower()
+        cap.scripts.append({
+            "label": label, "length": len(text),
+            "hints": {w: lowered.count(w) for w in _HINT_WORDS if w in lowered},
+        })
+        if not text.strip():
+            continue
+        if "json" in stype:
+            try:
+                cap.docs.append((f"embedded:{label}", json.loads(text)))
+            except json.JSONDecodeError:
+                cap.json_failures.append(f"{label} has a JSON type but is not valid JSON")
+        elif len(text) >= 500:
+            for j, doc in enumerate(json_in_script(text)):
+                cap.docs.append((f"embedded:{label}:json{j}", doc))
 
 
 def _load_more(page, max_rounds: int, notes: list[str]) -> None:
@@ -105,8 +133,7 @@ def _load_more(page, max_rounds: int, notes: list[str]) -> None:
 
 
 def capture_event(cfg: StubHubConfig, raw_dir: Path, *, executable_path: str | None = None,
-                  url_override: str | None = None, allowed_host_suffix: str = "stubhub.com",
-                  wait_for_me: bool = False) -> Capture:
+                  url_override: str | None = None, wait_for_me: bool = False) -> Capture:
     """wait_for_me: if a challenge appears in a visible window, pause so a person can solve it
     by hand, then continue. The tool itself never interacts with the challenge."""
     from playwright.sync_api import TimeoutError as PWTimeout
@@ -156,23 +183,41 @@ def capture_event(cfg: StubHubConfig, raw_dir: Path, *, executable_path: str | N
 
             _load_more(page, cfg.max_load_more, cap.notes)
             page.screenshot(path=str(raw_dir / "page.png"), full_page=False)
+            page.screenshot(path=str(raw_dir / "page-full.png"), full_page=True)
 
-            for s in page.evaluate(_EMBEDDED_JS):
-                try:
-                    cap.docs.append((f"embedded:script#{s['id'] or '?'}[{s['type']}]", json.loads(s["text"])))
-                except json.JSONDecodeError:
-                    cap.json_failures.append(f"embedded script {s['id']!r} is not valid JSON")
+            final_html = page.content()
+            (raw_dir / "page-final.html").write_text(final_html, encoding="utf-8")
+            cap.title, cap.html_len, cap.page_url = page.title(), len(final_html), page.url
+            try:
+                cap.body_text = page.inner_text("body", timeout=5_000)
+            except Exception as e:
+                cap.notes.append(f"could not read page text: {type(e).__name__}")
+            (raw_dir / "body.txt").write_text(cap.body_text, encoding="utf-8")
 
+            _harvest_scripts(page.evaluate(_INLINE_SCRIPTS_JS), cap)
+
+            # Every XHR/fetch response from any host, whatever its content type: sites don't
+            # always label JSON as JSON. Analytics noise is filtered out later by the parser.
             for r in responses:
-                host = urlsplit(r.url).hostname or ""
-                if not host.endswith(allowed_host_suffix):
+                if r.request.resource_type not in ("xhr", "fetch"):
                     continue
-                if "json" not in (r.headers.get("content-type") or "").lower():
+                ctype = (r.headers.get("content-type") or "").lower()
+                entry = {"method": r.request.method, "status": r.status, "type": ctype[:60], "url": r.url}
+                try:
+                    body = r.body()
+                except Exception as e:
+                    entry["body"] = f"unavailable: {type(e).__name__}"
+                    cap.network.append(entry)
+                    continue
+                entry["bytes"] = len(body)
+                cap.network.append(entry)
+                if not body or len(body) > _MAX_BODY:
                     continue
                 try:
-                    cap.docs.append((r.url, r.json()))
-                except Exception as e:
-                    cap.json_failures.append(f"{r.url}: {type(e).__name__}: {e}")
+                    cap.docs.append((r.url, json.loads(body)))
+                except (ValueError, UnicodeDecodeError):
+                    if "json" in ctype:
+                        cap.json_failures.append(f"{r.url}: labeled JSON but did not parse")
         finally:
             ctx.close()
 
@@ -180,9 +225,10 @@ def capture_event(cfg: StubHubConfig, raw_dir: Path, *, executable_path: str | N
         for src, doc in cap.docs:
             f.write(json.dumps({"source": src, "json": doc}, ensure_ascii=False) + "\n")
     (raw_dir / "capture_meta.json").write_text(json.dumps({
-        "page_url": cap.page_url, "page_status": cap.page_status,
-        "json_failures": cap.json_failures, "notes": cap.notes,
-    }, indent=2), encoding="utf-8")
+        "page_url": cap.page_url, "page_status": cap.page_status, "title": cap.title,
+        "html_len": cap.html_len, "json_failures": cap.json_failures, "notes": cap.notes,
+        "network": cap.network, "scripts": cap.scripts,
+    }, indent=2, ensure_ascii=False), encoding="utf-8")
     return cap
 
 

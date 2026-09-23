@@ -22,6 +22,8 @@ PAGE = """<!doctype html><html><body><div id=grid>loading</div>
 <script type="application/json" id="index-data">{"grid":{"items":[
  {"listingId": 1, "section": "16", "row": "5", "availableTickets": 2, "splits": [2], "price": "S$3,917"}]}}</script>
 <script>
+window.__INITIAL_STATE__ = {"event": {"name": "Final", "grid": {"listings": [
+ {"listingId": 4, "section": "117", "row": "3", "availableTickets": 2, "price": "S$3,632", "pad": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}]}}};
 fetch('/api/listings').then(r => r.json()).then(d => {
   document.getElementById('grid').textContent = d.items.length + ' listings';
 });
@@ -47,7 +49,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path.startswith("/api/listings"):
-            body, ctype = json.dumps(API).encode(), "application/json"
+            body, ctype = json.dumps(API).encode(), "text/plain"   # mislabeled on purpose
         elif self.path.startswith("/blocked"):
             body, ctype = BLOCKED.encode(), "text/html"
         else:
@@ -78,25 +80,23 @@ def sources(tmp_path):
 
 @pytest.mark.skipif(_chromium() is None, reason="no Chromium binary available")
 def test_capture_and_store(server, sources):
-    out = run(sources, executable_path=_chromium(), url_override=server + "/event?quantity=2",
-              allowed_host_suffix="127.0.0.1")
+    out = run(sources, executable_path=_chromium(), url_override=server + "/event?quantity=2")
     assert out.status == "ok", out.message
-    assert {l.listing_id for l in out.result.listings} == {"1", "2", "3"}
+    assert {l.listing_id for l in out.result.listings} == {"1", "2", "3", "4"}
     assert (out.raw_dir / "responses.jsonl").exists() and (out.raw_dir / "page.html").exists()
 
     conn = sqlite3.connect(sources.db_path)
-    assert conn.execute("SELECT status, listings_found FROM runs").fetchone() == ("ok", 3)
-    assert conn.execute("SELECT COUNT(*) FROM listings_snapshot").fetchone()[0] == 3
+    assert conn.execute("SELECT status, listings_found FROM runs").fetchone() == ("ok", 4)
+    assert conn.execute("SELECT COUNT(*) FROM listings_snapshot").fetchone()[0] == 4
 
     # re-parsing the saved raw folder reproduces the same listings without a browser
     again = run(sources, reparse_dir=out.raw_dir)
-    assert {l.listing_id for l in again.result.listings} == {"1", "2", "3"}
+    assert {l.listing_id for l in again.result.listings} == {"1", "2", "3", "4"}
 
 
 @pytest.mark.skipif(_chromium() is None, reason="no Chromium binary available")
 def test_challenge_page_is_blocked(server, sources):
-    out = run(sources, executable_path=_chromium(), url_override=server + "/blocked",
-              allowed_host_suffix="127.0.0.1")
+    out = run(sources, executable_path=_chromium(), url_override=server + "/blocked")
     assert out.status == "blocked"
     assert (out.raw_dir / "blocked.png").exists()
     conn = sqlite3.connect(sources.db_path)

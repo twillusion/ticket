@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections import Counter
 from datetime import datetime, timezone
@@ -14,6 +15,8 @@ from ticket.config import TIERS, load_section_tiers, load_sources, tier_for
 from ticket.pairs import FILTER_ONLY, NO, pair_status
 
 VIEW_WORDS = ("obstruct", "limited", "side view", "behind", "partial view", "restricted")
+PRICE_LIKE = re.compile(r"(?:[A-Z]{0,3}\$|£|€|¥)\s?\d[\d,]*")
+SECTION_LIKE = re.compile(r"\b(?:section|sec\.?)\s*\d+", re.I)
 
 
 def _fees_label(v) -> str:
@@ -36,18 +39,37 @@ def cmd_probe(args) -> int:
         return 2
 
     print(f"Page: {cap.page_url}  HTTP {cap.page_status}")
+    print(f"Title: {cap.title!r}   HTML size: {cap.html_len:,} chars")
     print(f"Raw captures saved in: {raw_dir}")
     for n in cap.notes:
         print(f"  note: {n}")
-    print(f"\nJSON documents captured: {len(cap.docs)}")
-    for src, doc in cap.docs:
-        top = list(doc.keys())[:12] if isinstance(doc, dict) else f"list[{len(doc)}]"
-        print(f"  - {src[:140]}\n      top-level: {top}")
+
+    lines = [ln.strip() for ln in cap.body_text.splitlines() if ln.strip()]
+    pricey = [ln for ln in lines if PRICE_LIKE.search(ln) or SECTION_LIKE.search(ln)]
+    print(f"\n[1] Visible page text: {len(lines)} lines, {len(pricey)} look like prices/sections")
+    for ln in pricey[:25]:
+        print(f"      | {ln[:120]}")
+
+    print(f"\n[2] XHR/fetch requests: {len(cap.network)}")
+    for n in cap.network[:45]:
+        print(f"      {n['method']:4} {n['status']} {n.get('bytes', '?'):>8}B {n['type'][:28]:28} {n['url'][:110]}")
+
+    big = sorted((sc for sc in cap.scripts if sc["length"] >= 2000), key=lambda sc: -sc["length"])
+    print(f"\n[3] Inline scripts over 2 KB: {len(big)}")
+    for sc in big[:12]:
+        print(f"      {sc['length']:>9,} chars  {sc['label'][:50]:50} hints {sc['hints']}")
+
+    print(f"\n[4] JSON documents captured: {len(cap.docs)}")
+    for src, doc in cap.docs[:30]:
+        top = list(doc.keys())[:10] if isinstance(doc, dict) else f"list[{len(doc)}]"
+        print(f"  - {src[:120]}\n      top-level: {top}")
+    if len(cap.docs) > 30:
+        print(f"  ... {len(cap.docs) - 30} more (see responses.jsonl)")
     for f in cap.json_failures:
         print(f"  ! {f}")
 
     res = extract(cap.docs, sources.stubhub.quantity, sources.stubhub.event_url)
-    print(f"\nListing-like arrays found: {len(res.candidates)}")
+    print(f"\n[5] Listing-like arrays found: {len(res.candidates)}")
     for c in res.candidates:
         print(f"  - {c.count} items at {c.path}\n      from {c.source_url[:120]}\n      keys: {c.sample_keys}")
         print("      sample: " + json.dumps(c.sample, ensure_ascii=False)[:1500])
@@ -60,7 +82,9 @@ def cmd_probe(args) -> int:
     for e in res.errors[:20]:
         print(f"  ! {e}")
     if not res.candidates:
-        print("\nNOTHING FOUND. Check page.png / page.html in the raw folder: did listings render?")
+        print("\nNOTHING FOUND in the captured data. Paste this whole output to Claude; also look at\n"
+              f"page.png in {raw_dir}: are ticket listings visible, or is something (a pop-up,\n"
+              "a quantity picker, a queue page) in the way?")
         return 2
     print("\nCompare 2-3 listings above with what the StubHub page shows (price, fees, section).")
     return 0
