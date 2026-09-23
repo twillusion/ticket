@@ -36,6 +36,12 @@ floor listings and none in 1/31/3/4/203/204/228/229) suggests that drawing is a 
 template and the real stage is at the Modelo Bridge end. The config header records this. It
 needs checking against Riot's or Ticketmaster's own map.
 
+**Update 2026-09-23: two maps, two layouts.** A second map
+([`docs/seatmap-centerstage-2026-09-23.png`](docs/seatmap-centerstage-2026-09-23.png)) shows a
+**center stage** with no floor seating, and carries a "general layout, may vary" disclaimer.
+StubHub shows an end stage. They contradict each other, so neither is evidence of Riot's
+real setup. The one thing they agree on: **no floor seats are sold.**
+
 Research on 2026-09-23 found **no published stage layout** from Riot, Barclays or any press
 coverage. This dev container is also blocked from reaching Ticketmaster, StubHub, SeatGeek,
 Vivid Seats, TickPick, Barclays and lolesports, so none of their event maps have been checked.
@@ -86,8 +92,11 @@ collector (Python + Playwright, cron on your machine)
 
 - **Python.** You both already use it. Playwright for StubHub; no framework.
 - **SQLite.** One `listings_snapshot` table:
-  `source, listing_id, seen_at, section_raw, section, tier(best/good/far/excluded/unclassified), row, quantity, allowed_splits, price_per_ticket, price_includes_fees (bool), currency, view_notes, url, raw_json`.
+  `source, listing_id, seen_at, section_raw, section, row, quantity, allowed_splits, price_per_ticket, price_includes_fees (bool), currency, view_notes, url, raw_json`.
   Keep `raw_json` so a later parser fix can be re-run over history.
+  **Tiers are not stored.** They're computed from `config/sections.toml` when the site is
+  built. The collector records **every** section, so if the stage layout turns out different,
+  editing the config re-tiers the whole history. Nothing has to be re-scraped.
 - **Site.** One static page, no server:
   1. Time series of the min and median **all-in price for 2 seats together**, one line per tier (best / good / far).
   2. Table of current cheapest buyable pairs per tier with a link out.

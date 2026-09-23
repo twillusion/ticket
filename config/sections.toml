@@ -11,6 +11,11 @@
 #   2026-09-23, which is what killed behind-stage seats would look like.
 #   Confirm against Riot/Ticketmaster's own map before trusting any of this.
 #
+#   UPDATE: a second map (docs/seatmap-centerstage-2026-09-23.png) shows a CENTER
+#   stage instead. If that's the real layout, the long sides (7/8/9, 23/24/25) are
+#   closest and this end is the far end. Tiers here reflect your circled choice, not
+#   a verified layout. The collector stores every section, so re-tiering is free.
+#
 # Anything not listed in a tier is either in `excluded` (known, not wanted) or
 # unknown. Unknown sections get stored as "unclassified" and flagged on the site.
 
