@@ -1,0 +1,43 @@
+# Section → tier map for LoL Worlds 2026 Final, Barclays Center (14 Nov 2026).
+#
+# Source: docs/seatmap-stubhub-2026-09-23.png (StubHub event page; your circled area).
+#
+# ORIENTATION ASSUMPTION — UNVERIFIED:
+#   StubHub's drawing puts the stage at the RIGHT (15/16/17) end, with the runway
+#   pointing left. Read literally, that makes this whole list the BEHIND-stage end.
+#   We assume instead that the drawing is StubHub's generic concert template and
+#   the real Riot stage is at the LEFT (Modelo Bridge) end, facing these sections.
+#   Evidence: floor, 1, 31, 3, 4, 203, 204, 228, 229 had zero listings on
+#   2026-09-23, which is what killed behind-stage seats would look like.
+#   Confirm against Riot/Ticketmaster's own map before trusting any of this.
+#
+# Anything not listed in a tier is either in `excluded` (known, not wanted) or
+# unknown. Unknown sections get stored as "unclassified" and flagged on the site.
+
+[tiers]
+# Lower bowl, head-on.
+best = ["15", "16", "17"]
+
+# Lower bowl angled corners/edges, plus 100-level head-on.
+good = ["10", "12", "13", "19", "20", "22",
+        "114", "115", "117", "118"]
+
+# 100-level corners and the whole 200-level end.
+far  = ["110", "111", "112", "120", "121",
+        "212", "213", "214", "215", "217", "218", "219", "220"]
+
+[excluded]
+# Inside the circle but a different product (loge boxes / club). Not tracked for now.
+boxes = ["A18", "A20", "A21", "A22", "A24", "A26", "A27", "A28", "A29", "A30",
+         "A31", "A32", "A33", "A34", "A35", "A36", "A37", "A38", "A40", "A42",
+         "A44", "A46", "A47", "A48", "BASELINE CLUB", "LOUNGE"]
+
+# Everything else visible on the map: long sides and the opposite end.
+sides_and_other_end = [
+  "FLOOR",
+  "1", "3", "4", "6", "7", "8", "9", "23", "24", "25", "26", "28", "29", "31",
+  "102", "104", "105", "106", "107", "108", "109",
+  "122", "123", "124", "125", "126", "127", "128", "129",
+  "202", "203", "204", "205", "206", "207", "209", "210", "211",
+  "221", "222", "223", "225", "226", "227", "228", "229", "230",
+]

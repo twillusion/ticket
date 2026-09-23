@@ -26,15 +26,15 @@ Prices are easy to scrape. Deciding whether "Section 18, Row 7" is in front of t
 - Resale sites label sections inconsistently (`18`, `Sec 18`, `Lower Level 18`, `Floor A`, `GA`).
 - 闲鱼 listings are free text ("决赛 内场 前排 连座") and often have no section number at all.
 
-**Approach:** keep a hand-maintained `config/sections.yaml` built once from the real event seat
-map (the Ticketmaster / StubHub event page map). Every section gets one of:
+**Approach:** keep a hand-maintained [`config/sections.toml`](config/sections.toml) built from
+the event seat map ([`docs/seatmap-stubhub-2026-09-23.png`](docs/seatmap-stubhub-2026-09-23.png)).
+Tracked sections go into `best` / `good` / `far`. Known but unwanted sections go into `excluded`.
 
-```yaml
-front:   [...]   # tracked
-angled:  [...]   # front corners, tracked only if you opt in (see open questions)
-side:    [...]   # ignored
-behind:  [...]   # ignored / usually not sold
-```
+**Stage orientation is still unverified.** StubHub's drawing puts the stage at the 15/16/17
+end, which would make the chosen sections the *behind-stage* end. The listing pattern (no
+floor listings and none in 1/31/3/4/203/204/228/229) suggests that drawing is a generic
+template and the real stage is at the Modelo Bridge end. The config header records this. It
+needs checking against Riot's or Ticketmaster's own map.
 
 A listing whose section **isn't in the map** doesn't get dropped quietly. It's stored as
 `unclassified` and shown in its own banner on the site until someone classifies it. The same
@@ -70,11 +70,11 @@ collector (Python + Playwright, cron on your machine)
 
 - **Python.** You both already use it. Playwright for StubHub; no framework.
 - **SQLite.** One `listings_snapshot` table:
-  `source, listing_id, seen_at, section_raw, section, zone(front/angled/side/behind/unclassified), row, quantity, price_per_ticket, price_includes_fees (bool), currency, url, raw_json`.
+  `source, listing_id, seen_at, section_raw, section, tier(best/good/far/excluded/unclassified), row, quantity, price_per_ticket, price_includes_fees (bool), currency, url, raw_json`.
   Keep `raw_json` so a later parser fix can be re-run over history.
 - **Site.** One static page, no server:
-  1. Time series of the min and median **per-ticket, all-in** price for `front` (and `angled` if enabled).
-  2. Table of current cheapest front listings with a link out.
+  1. Time series of the min and median **per-ticket, all-in** price, one line per tier (best / good / far).
+  2. Table of current cheapest listings per tier with a link out.
   3. Health panel: last successful scrape per source, listings found, count of `unclassified`.
      A scrape that returns 0 listings or fails to parse shows as **red**, never as "no data".
 - **Alerts (later):** notify when a front listing drops below a threshold you set.
@@ -83,7 +83,7 @@ collector (Python + Playwright, cron on your machine)
 
 - **Fees:** StubHub can show prices with or without fees depending on region and settings.
   Record which one we got. Never mix them on one chart without saying so.
-- **Currency:** 闲鱼 is CNY. Store the original currency and convert only at display time, with
+- **Currency:** your StubHub session shows **SGD**; 闲鱼 is CNY. Store the original currency and convert only at display time, with
   the FX rate and date shown.
 - **Quantity/splits:** a "$900" listing might be one ticket out of a pair that won't split.
   Filter by the quantity you actually want to buy.
@@ -97,7 +97,7 @@ collector (Python + Playwright, cron on your machine)
 | # | Deliverable | Depends on |
 |---|---|---|
 | M0 | Repo skeleton + this plan | done |
-| M1 | `config/sections.yaml` from the real event seat map + SQLite schema | your answers below + a screenshot of the event seat map |
+| M1 | `config/sections.toml` (draft done) + SQLite schema | stage orientation confirmed |
 | M2 | StubHub collector, run manually, writes snapshots | runs on your machine |
 | M3 | Static site: chart + cheapest table + health panel | M2 |
 | M4 | 闲鱼 manual-entry path (CLI or small form) | M1 |
@@ -105,15 +105,14 @@ collector (Python + Playwright, cron on your machine)
 
 M1–M3 is the useful core. Everything after that is optional.
 
-## 7. Open questions (need answers before M1)
+## 7. Open questions
 
-1. **Which match(es)?** Final only, or also the semis in Allen, TX?
-2. **Floor seats:** do floor sections count as "front"? (They usually are front, but viewing
-   quality varies a lot.)
-3. **Front corners** (angled but still facing the stage): track them or not?
-4. **Quantity:** 1 ticket, or 2+ seated together?
-5. **Price ceiling / alert threshold**, if any.
-6. **闲鱼:** is manual entry acceptable for v1?
-7. **Where will this run?** Your laptop on a cron job is the realistic answer, given bot protection.
-8. Can you get a **screenshot of the Barclays seat map for this event** (from StubHub or TM)?
-   That's what `sections.yaml` gets built from.
+Answered: Final only. Seat map provided. Floor excluded (no listings anyway). Sections split
+into best / good / far.
+
+1. **Stage orientation:** does the real stage face the 15/16/17 end? (See §2.)
+2. **Loge boxes (A18–A48) and Baseline Club** inside the circled area: currently excluded. Track them?
+3. **Quantity:** 1 ticket, or 2+ seated together?
+4. **Price ceiling / alert threshold**, if any (in SGD?).
+5. **闲鱼:** is manual entry acceptable for v1?
+6. **Where will this run?** Your laptop on a cron job is the realistic answer, given bot protection.
