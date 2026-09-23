@@ -23,21 +23,7 @@ def _fees_label(v) -> str:
     return {1: "incl. fees", 0: "excl. fees"}.get(v, "fees UNKNOWN")
 
 
-def cmd_probe(args) -> int:
-    from ticket.stubhub.collect import extract_all
-    from ticket.stubhub.fetch import Blocked, capture_event
-
-    sources = load_sources()
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    raw_dir = sources.raw_dir / "stubhub" / f"probe-{stamp}"
-    try:
-        cap = capture_event(sources.stubhub, raw_dir, wait_for_me=args.wait_for_me)
-    except Blocked as e:
-        print(f"BLOCKED: {e}\nScreenshot and page HTML saved in {raw_dir}", file=sys.stderr)
-        if not args.wait_for_me:
-            print("Try: python -m ticket stubhub probe --wait-for-me  (solve the check by hand)", file=sys.stderr)
-        return 2
-
+def _print_capture(cap, raw_dir) -> None:
     print(f"Page: {cap.page_url}  HTTP {cap.page_status}")
     print(f"Title: {cap.title!r}   HTML size: {cap.html_len:,} chars")
     print(f"Raw captures saved in: {raw_dir}")
@@ -50,8 +36,9 @@ def cmd_probe(args) -> int:
     for ln in pricey[:25]:
         print(f"      | {ln[:120]}")
 
-    print(f"\n[2] XHR/fetch requests: {len(cap.network)}")
-    for n in cap.network[:45]:
+    stubhub_xhr = [n for n in cap.network if "stubhub" in n["url"]]
+    print(f"\n[2] XHR/fetch requests: {len(cap.network)} total, {len(stubhub_xhr)} to StubHub (shown)")
+    for n in stubhub_xhr[:25]:
         print(f"      {n['method']:4} {n['status']} {n.get('bytes', '?'):>8}B {n['type'][:28]:28} {n['url'][:110]}")
 
     big = sorted((sc for sc in cap.scripts if sc["length"] >= 2000), key=lambda sc: -sc["length"])
@@ -59,47 +46,67 @@ def cmd_probe(args) -> int:
     for sc in big[:12]:
         print(f"      {sc['length']:>9,} chars  {sc['label'][:50]:50} hints {sc['hints']}")
 
-    print(f"\n[4] JSON documents captured: {len(cap.docs)}")
-    for src, doc in cap.docs[:30]:
-        top = list(doc.keys())[:10] if isinstance(doc, dict) else f"list[{len(doc)}]"
-        print(f"  - {src[:120]}\n      top-level: {top}")
-    if len(cap.docs) > 30:
-        print(f"  ... {len(cap.docs) - 30} more (see responses.jsonl)")
-    for f in cap.json_failures:
-        print(f"  ! {f}")
+    print(f"\n[4] JSON documents captured: {len(cap.docs)} (details in responses.jsonl)")
 
-    fee_lines = [ln for ln in lines if "fee" in ln.lower()][:10]
-    print(f"\n[5] Page text mentioning fees: {len(fee_lines)}")
-    for ln in fee_lines:
-        print(f"      | {ln[:140]}")
+    fee_lines = sorted({ln for ln in lines if "fee" in ln.lower()})[:10]
+    print(f"\n[5] Distinct page text mentioning fees: {fee_lines}")
 
     print(f"\n[6] Listing cards read from the page: {len(cap.cards)}")
-    for c in cap.cards[:3]:
+    for c in cap.cards[:2]:
         print(f"  - label {c['label']!r}  href {str(c['href'])[:100]}")
         print(f"      lines:  {c['lines'][:14]}")
         print(f"      prices: {[(p['text'], 'STRUCK' if p['struck'] else 'live', 'shown' if p['visible'] else 'hidden') for p in c['prices']]}")
-        print(f"      data-*: {json.dumps(c['data_attrs'], ensure_ascii=False)[:400]}")
-        print(f"      html:   {c['html'][:700]}")
 
-    res, method = extract_all(cap.docs, cap.cards, sources.stubhub.quantity, sources.stubhub.event_url)
-    print(f"\n[7] Listing-like JSON arrays: {len(res.candidates)}   (listings taken from: {method})")
-    for c in res.candidates:
-        print(f"  - {c.count} items at {c.path}\n      from {c.source_url[:120]}\n      keys: {c.sample_keys}")
-        print("      sample: " + json.dumps(c.sample, ensure_ascii=False)[:1500])
-    print(f"\nParsed listings: {len(res.listings)}   duplicates skipped: {res.duplicates}   issues: {len(res.errors)}")
-    for l in res.listings[:8]:
-        print(f"  {l.listing_id:>14}  sec {l.section_raw!r} -> {l.section!r}  row {l.row!r}  qty {l.quantity}"
-              f"  splits {l.allowed_splits}  {l.price_per_ticket} {l.currency}"
-              f"  via {l.price_field!r} ({_fees_label(None if l.price_includes_fees is None else int(l.price_includes_fees))})")
-        print(f"      price fields seen: {json.dumps(l.price_candidates, ensure_ascii=False)[:300]}")
+
+def cmd_probe(args) -> int:
+    from ticket.stubhub.collect import extract_all
+    from ticket.stubhub.fetch import Blocked, capture_event, with_quantity
+
+    sources = load_sources()
+    cfg = sources.stubhub
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    views = cfg.view_list()
+    if args.view:
+        views = [v for v in views if v[0] == args.view]
+        if not views:
+            print(f"No view named {args.view!r}. Configured: {[n for n, _ in cfg.view_list()]}", file=sys.stderr)
+            return 1
+
+    docs, cards = [], []
+    for name, url in views:
+        raw_dir = sources.raw_dir / "stubhub" / f"probe-{stamp}" / name
+        print(f"\n==================== view {name!r} ====================")
+        try:
+            cap = capture_event(cfg, raw_dir, url_override=with_quantity(url, cfg.quantity),
+                                wait_for_me=args.wait_for_me)
+        except Blocked as e:
+            print(f"BLOCKED: {e}\nScreenshot and page HTML saved in {raw_dir}", file=sys.stderr)
+            if not args.wait_for_me:
+                print("Try: python -m ticket stubhub probe --wait-for-me  (solve the check by hand)", file=sys.stderr)
+            return 2
+        _print_capture(cap, raw_dir)
+        docs.extend(cap.docs)
+        for c in cap.cards:
+            c["view"] = name
+        cards.extend(cap.cards)
+
+    res, method = extract_all(docs, cards, cfg.quantity, cfg.event_url)
+    tiers = load_section_tiers()
+    print(f"\n==================== all views ====================")
+    print(f"Listings taken from: {method}   parsed: {len(res.listings)}   duplicates across views: "
+          f"{res.duplicates}   issues: {len(res.errors)}")
+    for l in sorted(res.listings, key=lambda l: (tier_for(l.section, tiers), l.price_per_ticket or 0)):
+        fees = {True: "incl. fees", False: "excl. fees", None: "fees ?"}[l.price_includes_fees]
+        print(f"  {tier_for(l.section, tiers):12} sec {l.section:>5} row {str(l.row):>4} qty {l.quantity}"
+              f"  {l.price_per_ticket:>9,.0f} {l.currency} ({fees})  pair {pair_status(l.quantity, None if l.allowed_splits is None else json.dumps(l.allowed_splits), l.requested_quantity):11}"
+              f"  id {l.listing_id}  [{l.price_candidates.get('view')}]")
     for e in res.errors[:20]:
         print(f"  ! {e}")
     if not res.listings:
         print("\nNOTHING FOUND in the captured data. Paste this whole output to Claude; also look at\n"
-              f"page.png in {raw_dir}: are ticket listings visible, or is something (a pop-up,\n"
-              "a quantity picker, a queue page) in the way?")
+              "page.png in the probe folder: are ticket listings visible, or is something in the way?")
         return 2
-    print("\nCompare 2-3 listings above with what the StubHub page shows (price, fees, section).")
+    print("\nCompare 2-3 listings above with the StubHub page (price, section, row).")
     return 0
 
 
@@ -151,7 +158,8 @@ def cmd_status(args) -> int:
     fee_flags = Counter(_fees_label(r["price_includes_fees"]) for r in rows)
     price_fields = Counter(r["price_field"] for r in rows)
     print(f"  currency: {dict(currencies)}   price field: {dict(price_fields)}   {dict(fee_flags)}")
-    print("  (fee inclusion is inferred from the field name; confirm once against the StubHub page)")
+    if any(r["price_field"] != "dom:unstruck-price" for r in rows):
+        print("  (for JSON-sourced listings, fee inclusion is inferred from the field name)")
     if None in currencies:
         print("  !! some listings have an UNKNOWN currency. Their prices are not comparable.")
 
@@ -192,6 +200,7 @@ def main(argv: list[str] | None = None) -> int:
     pr = sh.add_parser("probe", help="load the page, save raw captures, print what was found; stores nothing")
     pr.add_argument("--wait-for-me", action="store_true",
                     help="if StubHub shows a bot check, pause so you can solve it in the window")
+    pr.add_argument("--view", help="only probe this configured view")
     c = sh.add_parser("collect", help="capture and store one snapshot")
     c.add_argument("--reparse", metavar="RAW_DIR", help="re-parse a saved raw folder instead of scraping")
     c.add_argument("--wait-for-me", action="store_true",

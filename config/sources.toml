@@ -15,5 +15,24 @@ headless = false
 browser_channel = "chrome"
 # Persistent browser profile, so cookies survive between runs (gitignored).
 profile_dir = "data/browser-profile"
-# How many times to scroll / click "Show more" to load additional listings.
+# How many times to scroll / click "Show more" to load additional listings. StubHub refused
+# the "show more" request with a 403 in testing, so don't count on this; use views instead.
 max_load_more = 15
+
+# Filtered views of the same event. StubHub only shows ~10 listings per page load, in its own
+# "recommended" order, so one view per tier (your sections selected on the map, sorted by
+# price low to high) gets the listings that matter. To make one: open the event in your normal
+# browser, select the sections on the map, set sorting to price low -> high, then copy the URL
+# from the address bar. quantity=2 is added automatically. With no views, event_url is used.
+#
+# [[stubhub.views]]
+# name = "best"
+# url  = "https://www.stubhub.com/...paste..."
+#
+# [[stubhub.views]]
+# name = "good"
+# url  = "https://www.stubhub.com/...paste..."
+#
+# [[stubhub.views]]
+# name = "far"
+# url  = "https://www.stubhub.com/...paste..."

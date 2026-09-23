@@ -130,8 +130,21 @@ CLICK_MORE_JS = r"""
 }
 """
 
+LABELS_JS = r"""
+() => {
+  const LABEL = /^\s*(?:section|sec\.?)\s+\S+/i;
+  const out = [];
+  const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  while (w.nextNode()) { const t = (w.currentNode.nodeValue || '').trim(); if (t.length < 40 && LABEL.test(t)) out.push(t); }
+  return out;
+}
+"""
+
 _ROW = re.compile(r"\brow\s+([A-Za-z0-9]{1,6})\b", re.I)
 _QTY = re.compile(r"\b(\d{1,2})\s*(?:tickets?|tix)\b", re.I)
+_TOGETHER = re.compile(r"\b(\d{1,2})\s*tickets?\s+together\b", re.I)
+_FEES_IN = re.compile(r"\b(?:incl\.?|including)\s+(?:estimated\s+)?fees\b", re.I)
+_FEES_OUT = re.compile(r"\b(?:excl\.?|excluding|before|plus)\s+(?:estimated\s+)?fees\b|\+\s*fees\b", re.I)
 _ID_ATTR = re.compile(r"listing[-_]?id|^data-id$|^data-listing$", re.I)
 
 
@@ -176,13 +189,34 @@ def map_card(card: dict, requested_quantity: int | None, event_url: str) -> tupl
     row_m = _ROW.search(text)
     qty_m = _QTY.search(text)
 
+    data_price = card.get("data_attrs", {}).get("data-price")
+    if data_price:
+        try:
+            dp, _ = parse_money(data_price, None)
+        except ListingParseError:
+            issues.append(f"unreadable data-price {data_price!r}")
+        else:
+            if dp != price:
+                raise ListingParseError(f"{section_raw}: card shows {price} but its data-price says {data_price!r}")
+
+    fees_in, fees_out = bool(_FEES_IN.search(text)), bool(_FEES_OUT.search(text))
+    includes_fees = True if fees_in and not fees_out else False if fees_out and not fees_in else None
+    if includes_fees is None:
+        issues.append("card doesn't say clearly whether the price includes fees")
+
+    qty = int(qty_m[1]) if qty_m else None
+    together = _TOGETHER.search(text)
+    splits = None
+    if together and qty == int(together[1]) == requested_quantity:
+        splits = [qty]   # card offers exactly this many seats together
+
     listing_id, id_source = _listing_id(card)
     if listing_id is None:
         basis = json.dumps([section_raw, row_m and row_m[1], price, lines], sort_keys=True)
         listing_id = "h:" + hashlib.sha1(basis.encode()).hexdigest()[:16]
         issues.append("no listing id in card; used content hash")
 
-    consumed = re.compile(r"^(?:section|sec\.?)\s|\brow\s|(?:[A-Z]{0,3}\$|£|€|¥)\s?\d|\btickets?\b", re.I)
+    consumed = re.compile(r"^(?:section|sec\.?)\s|\brow\s|(?:[A-Z]{0,3}\$|£|€|¥)\s?\d|\btickets?\b|\bfees\b|^\d+(?:\.\d)?$", re.I)
     notes = [ln for ln in lines if not consumed.search(ln)][:15]
 
     href = card.get("href")
@@ -194,14 +228,16 @@ def map_card(card: dict, requested_quantity: int | None, event_url: str) -> tupl
         section_raw=section_raw,
         section=normalize_section(section_raw),
         row=row_m[1] if row_m else None,
-        quantity=int(qty_m[1]) if qty_m else None,
-        allowed_splits=None,
+        quantity=qty,
+        allowed_splits=splits,
         requested_quantity=requested_quantity,
         price_per_ticket=price,
         currency=currency,
         price_field="dom:unstruck-price",
-        price_includes_fees=None,
-        price_candidates={"dom_prices": card.get("prices", []), "id_source": id_source},
+        price_includes_fees=includes_fees,
+        price_candidates={"dom_prices": card.get("prices", []), "data_price": data_price, "id_source": id_source,
+                          "fees_from": "card text", "splits_from": "'N tickets together'" if splits else None,
+                          "view": card.get("view")},
         view_notes=notes,
         url=url,
         raw={k: v for k, v in card.items() if k != "html"} | {"html_head": card.get("html", "")[:2000]},

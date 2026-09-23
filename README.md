@@ -43,6 +43,14 @@ the price includes fees. If they don't match, or it says NOTHING FOUND, send me 
 (and `page.png`). Look through it first; it shouldn't contain anything personal since no login
 is used.
 
+## Views (recommended)
+
+StubHub shows only ~10 listings per page load, and blocked the "show more" request in testing.
+So instead of paging, the tool loads a few **filtered views**: one per tier, with those sections
+selected on StubHub's map and sorted by price. How to set one up is in
+[`config/sources.toml`](config/sources.toml). Probe a single view with
+`python -m ticket stubhub probe --view best`.
+
 ## Collect and check
 
 ```bash

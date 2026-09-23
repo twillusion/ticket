@@ -24,6 +24,10 @@ class StubHubConfig:
     browser_channel: str
     profile_dir: Path
     max_load_more: int
+    views: tuple[tuple[str, str], ...] = ()   # (name, url); empty = just event_url
+
+    def view_list(self) -> list[tuple[str, str]]:
+        return list(self.views) or [("all", self.event_url)]
 
 
 @dataclass(frozen=True)
@@ -52,8 +56,22 @@ def load_sources() -> Sources:
             browser_channel=sh.get("browser_channel", ""),
             profile_dir=REPO_ROOT / sh["profile_dir"],
             max_load_more=int(sh["max_load_more"]),
+            views=tuple(_views(sh.get("views", []))),
         ),
     )
+
+
+def _views(raw: list[dict]) -> list[tuple[str, str]]:
+    out, names = [], set()
+    for v in raw:
+        name, url = v.get("name"), v.get("url")
+        if not name or not url:
+            raise ConfigError(f"each [[stubhub.views]] needs a name and a url: {v!r}")
+        if name in names:
+            raise ConfigError(f"duplicate stubhub view name {name!r}")
+        names.add(name)
+        out.append((name, url))
+    return out
 
 
 def load_section_tiers(path: Path | None = None) -> dict[str, str]:

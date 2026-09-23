@@ -19,7 +19,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from ticket.config import StubHubConfig
 from ticket.jsonscan import json_in_script
-from ticket.stubhub.dom import CARDS_JS, CLICK_MORE_JS, COUNT_CARDS_JS, SCROLL_LIST_JS
+from ticket.stubhub.dom import CARDS_JS, CLICK_MORE_JS, COUNT_CARDS_JS, LABELS_JS, SCROLL_LIST_JS
 
 # Challenge detection. Bare vendor names ("perimeterx", "datadome", "captcha-delivery") are NOT
 # used: their sensor scripts are included on normal pages too, which caused false "blocked"
@@ -199,6 +199,17 @@ def capture_event(cfg: StubHubConfig, raw_dir: Path, *, executable_path: str | N
 
             _harvest_scripts(page.evaluate(_INLINE_SCRIPTS_JS), cap)
             cap.cards = page.evaluate(CARDS_JS)
+            labels = page.evaluate(LABELS_JS)
+            unread = list(labels)
+            for c in cap.cards:
+                if c["label"] in unread:
+                    unread.remove(c["label"])
+            if unread:
+                cap.notes.append(f"!! {len(labels)} section labels on the page but {len(cap.cards)} cards read; "
+                                 f"not read: {unread[:15]}")
+            totals = sorted({m.group(0) for m in re.finditer(r"\b\d[\d,]*\s+listings?\b", cap.body_text, re.I)})
+            if totals:
+                cap.notes.append(f"page says: {totals[:5]} (cards read: {len(cap.cards)})")
 
             # Every XHR/fetch response from any host, whatever its content type: sites don't
             # always label JSON as JSON. Analytics noise is filtered out later by the parser.
@@ -215,6 +226,10 @@ def capture_event(cfg: StubHubConfig, raw_dir: Path, *, executable_path: str | N
                     continue
                 entry["bytes"] = len(body)
                 cap.network.append(entry)
+                if r.status >= 400 and (urlsplit(r.url).hostname or "").endswith("stubhub.com"):
+                    snippet = body[:300].decode("utf-8", "replace").replace("\n", " ")
+                    cap.notes.append(f"!! StubHub refused a request ({r.request.method} {r.status}) "
+                                     f"{r.url[:120]} -> {snippet}")
                 if not body or len(body) > _MAX_BODY:
                     continue
                 try:

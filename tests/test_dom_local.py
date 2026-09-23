@@ -89,7 +89,9 @@ def test_cards_scroll_struck_price_and_ids(server, tmp_path):
     assert by_sec["108"].listing_id == "9003"          # from the href query
     assert by_sec["108"].quantity == 4
     assert "Clear view" in by_sec["16"].view_notes
-    assert all(l.price_field == "dom:unstruck-price" and l.price_includes_fees is None for l in by_sec.values())
+    assert all(l.price_field == "dom:unstruck-price" and l.price_includes_fees is True for l in by_sec.values())
+    assert s19.allowed_splits == [2]                     # "2 tickets together" under quantity=2
+    assert by_sec["108"].allowed_splits is None           # 4 together: can't assume it splits to 2
 
     again = run(sources, reparse_dir=out.raw_dir)       # cards.json re-parses without a browser
     assert {l.section for l in again.result.listings} == set(by_sec)
@@ -100,6 +102,14 @@ def test_two_live_prices_is_an_error_not_a_guess():
             "prices": [{"text": "S$3,000", "struck": False, "visible": True},
                        {"text": "S$3,400", "struck": False, "visible": True}]}
     with pytest.raises(ListingParseError, match="different un-struck prices"):
+        map_card(card, 2, "https://www.stubhub.com/x")
+
+
+def test_data_price_disagreement_is_an_error():
+    card = {"label": "Section 16", "lines": ["Section 16", "S$3,000", "incl. fees"], "href": None,
+            "data_attrs": {"data-price": "S$3,400"},
+            "prices": [{"text": "S$3,000", "struck": False, "visible": True}]}
+    with pytest.raises(ListingParseError, match="data-price"):
         map_card(card, 2, "https://www.stubhub.com/x")
 
 

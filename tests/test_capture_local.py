@@ -83,7 +83,7 @@ def test_capture_and_store(server, sources):
     out = run(sources, executable_path=_chromium(), url_override=server + "/event?quantity=2")
     assert out.status == "ok", out.message
     assert {l.listing_id for l in out.result.listings} == {"1", "2", "3", "4"}
-    assert (out.raw_dir / "responses.jsonl").exists() and (out.raw_dir / "page.html").exists()
+    assert (out.raw_dir / "default" / "responses.jsonl").exists() and (out.raw_dir / "default" / "page.html").exists()
 
     conn = sqlite3.connect(sources.db_path)
     assert conn.execute("SELECT status, listings_found FROM runs").fetchone() == ("ok", 4)
@@ -98,6 +98,6 @@ def test_capture_and_store(server, sources):
 def test_challenge_page_is_blocked(server, sources):
     out = run(sources, executable_path=_chromium(), url_override=server + "/blocked")
     assert out.status == "blocked"
-    assert (out.raw_dir / "blocked.png").exists()
+    assert (out.raw_dir / "default" / "blocked.png").exists()
     conn = sqlite3.connect(sources.db_path)
     assert conn.execute("SELECT status FROM runs").fetchone() == ("blocked",)

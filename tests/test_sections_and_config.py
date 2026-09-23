@@ -37,3 +37,14 @@ def test_pair_status():
     assert pair_status(1, None, 2) == NO
     assert pair_status(2, None, 2) == FILTER_ONLY
     assert pair_status(None, None, None) == NO
+
+
+def test_views_config_validation():
+    from ticket.config import StubHubConfig, _views
+    assert _views([{"name": "best", "url": "u1"}, {"name": "good", "url": "u2"}]) == [("best", "u1"), ("good", "u2")]
+    with pytest.raises(ConfigError):
+        _views([{"name": "best", "url": "u1"}, {"name": "best", "url": "u2"}])
+    with pytest.raises(ConfigError):
+        _views([{"name": "best"}])
+    cfg = StubHubConfig("https://e", 2, False, "", None, 1)
+    assert cfg.view_list() == [("all", "https://e")]
