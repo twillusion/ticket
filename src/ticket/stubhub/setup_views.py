@@ -100,7 +100,7 @@ def run_wizard(sources, only: list[str] | None = None) -> int:
     failed: list[ViewCheck] = []
 
     with sync_playwright() as p:
-        ctx = launch_context(p, cfg, headless=False)   # a person has to see and click it
+        ctx = launch_context(p, cfg, headless=False, offscreen=False)   # a person has to see and click it
         try:
             page = ctx.new_page()
             for tier in TIERS:

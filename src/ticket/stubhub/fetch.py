@@ -136,10 +136,18 @@ def _load_more(page, max_rounds: int, notes: list[str]) -> None:
         notes.append(f"still growing after {max_rounds} rounds; raise max_load_more to get the rest")
 
 
-def launch_context(p, cfg: StubHubConfig, executable_path: str | None = None, headless: bool | None = None):
-    """Chrome with the tool's persistent profile, so cookies from earlier runs are reused."""
-    launch: dict[str, Any] = {"headless": cfg.headless if headless is None else headless,
-                              "viewport": {"width": 1366, "height": 900}}
+def launch_context(p, cfg: StubHubConfig, executable_path: str | None = None, headless: bool | None = None,
+                   offscreen: bool | None = None):
+    """Chrome with the tool's persistent profile, so cookies from earlier runs are reused.
+
+    offscreen: a normal (non-headless) window opened far outside the visible desktop, so it
+    doesn't interrupt whoever is using the computer.
+    """
+    headless = cfg.headless if headless is None else headless
+    offscreen = cfg.offscreen if offscreen is None else offscreen
+    launch: dict[str, Any] = {"headless": headless, "viewport": {"width": 1366, "height": 900}}
+    if offscreen and not headless:
+        launch["args"] = ["--window-position=-32000,-32000"]
     if executable_path:
         launch["executable_path"] = executable_path
     elif cfg.browser_channel:
@@ -160,7 +168,8 @@ def capture_event(cfg: StubHubConfig, raw_dir: Path, *, executable_path: str | N
     responses = []
 
     with sync_playwright() as p:
-        ctx = launch_context(p, cfg, executable_path)
+        # A person can't solve a bot check in a window they can't see.
+        ctx = launch_context(p, cfg, executable_path, offscreen=False if wait_for_me else None)
         try:
             page = ctx.new_page()
             page.on("response", lambda r: responses.append(r))

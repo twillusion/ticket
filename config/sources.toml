@@ -10,6 +10,9 @@ quantity = 2                    # ask StubHub for listings buyable as exactly 2
 # StubHub's bot protection is much harder on headless browsers. Leave this false unless
 # headless runs are confirmed to work on your machine.
 headless = false
+# Normal (non-headless) Chrome, but opened far off-screen so scheduled runs don't pop up over
+# whatever you're doing. Ignored when headless = true. Test first: collect --offscreen
+offscreen = false
 # Use your installed Google Chrome instead of Playwright's Chromium ("chrome"), or "" for
 # Playwright's bundled Chromium. Real Chrome tends to get blocked less.
 browser_channel = "chrome"

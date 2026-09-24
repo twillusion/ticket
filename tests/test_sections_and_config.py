@@ -48,3 +48,25 @@ def test_views_config_validation():
         _views([{"name": "best"}])
     cfg = StubHubConfig("https://e", 2, False, "", None, 1)
     assert cfg.view_list() == [("all", "https://e")]
+
+
+def test_launch_modes(tmp_path):
+    from ticket.config import StubHubConfig
+    from ticket.stubhub.fetch import launch_context
+
+    seen = {}
+
+    class Chromium:
+        def launch_persistent_context(self, profile, **kw):
+            seen.clear(); seen.update(kw)
+
+    class P:
+        chromium = Chromium()
+
+    cfg = StubHubConfig("https://e", 2, False, "chrome", tmp_path / "prof", 1, offscreen=True)
+    launch_context(P(), cfg)
+    assert seen["headless"] is False and seen["args"] == ["--window-position=-32000,-32000"]
+    launch_context(P(), cfg, offscreen=False)            # e.g. --wait-for-me: must be visible
+    assert "args" not in seen
+    launch_context(P(), cfg, headless=True)              # headless ignores offscreen
+    assert seen["headless"] is True and "args" not in seen

@@ -58,11 +58,27 @@ def _print_capture(cap, raw_dir) -> None:
         print(f"      prices: {[(p['text'], 'STRUCK' if p['struck'] else 'live', 'shown' if p['visible'] else 'hidden') for p in c['prices']]}")
 
 
+def _sources_with_overrides(args):
+    """--headless / --offscreen override config/sources.toml for one run."""
+    from dataclasses import replace
+
+    sources = load_sources()
+    changes = {}
+    if getattr(args, "headless", False):
+        changes["headless"] = True
+    if getattr(args, "offscreen", False):
+        changes["offscreen"] = True
+    if changes:
+        sources = replace(sources, stubhub=replace(sources.stubhub, **changes))
+        print(f"(this run: {changes})")
+    return sources
+
+
 def cmd_probe(args) -> int:
     from ticket.stubhub.collect import extract_all
     from ticket.stubhub.fetch import Blocked, capture_event, with_quantity
 
-    sources = load_sources()
+    sources = _sources_with_overrides(args)
     cfg = sources.stubhub
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     views = cfg.view_list()
@@ -113,7 +129,7 @@ def cmd_probe(args) -> int:
 def cmd_collect(args) -> int:
     from ticket.stubhub.collect import run
 
-    sources = load_sources()
+    sources = _sources_with_overrides(args)
     out = run(sources, reparse_dir=Path(args.reparse) if args.reparse else None,
               **({"wait_for_me": True} if args.wait_for_me and not args.reparse else {}))
     print(f"[stubhub] {out.run_id}: {out.status.upper()} - {out.message}")
@@ -201,6 +217,9 @@ def main(argv: list[str] | None = None) -> int:
     pr.add_argument("--wait-for-me", action="store_true",
                     help="if StubHub shows a bot check, pause so you can solve it in the window")
     pr.add_argument("--view", help="only probe this configured view")
+    for sp in (pr,):
+        sp.add_argument("--headless", action="store_true", help="no browser window (may be blocked more)")
+        sp.add_argument("--offscreen", action="store_true", help="normal window, placed off-screen")
     sh.add_parser("discover", help="find section ids, test StubHub's link filters, write the per-tier views")
     sv = sh.add_parser("setup-views", help="guided: filter StubHub per tier in the window, check it, save the links")
     sv.add_argument("--tier", action="append", choices=TIERS, help="only (re)do this tier; repeatable")
@@ -208,6 +227,8 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--reparse", metavar="RAW_DIR", help="re-parse a saved raw folder instead of scraping")
     c.add_argument("--wait-for-me", action="store_true",
                    help="if StubHub shows a bot check, pause so you can solve it (not for scheduled runs)")
+    c.add_argument("--headless", action="store_true", help="no browser window (may be blocked more)")
+    c.add_argument("--offscreen", action="store_true", help="normal window, placed off-screen")
 
     sub.add_parser("status", help="summarize the latest runs and prices")
 

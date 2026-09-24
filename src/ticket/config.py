@@ -25,6 +25,7 @@ class StubHubConfig:
     profile_dir: Path
     max_load_more: int
     views: tuple[tuple[str, str], ...] = ()   # (name, url); empty = just event_url
+    offscreen: bool = False                   # visible-mode window, but placed off-screen
 
     def view_list(self) -> list[tuple[str, str]]:
         return list(self.views) or [("all", self.event_url)]
@@ -57,6 +58,7 @@ def load_sources() -> Sources:
             profile_dir=REPO_ROOT / sh["profile_dir"],
             max_load_more=int(sh["max_load_more"]),
             views=tuple(_views(sh.get("views", []) + _generated_views())),
+            offscreen=bool(sh.get("offscreen", False)),
         ),
     )
 
