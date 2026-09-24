@@ -1,0 +1,53 @@
+# EXPERIMENT: does StubHub let a GitHub-hosted runner in?
+#
+# GitHub runners use datacenter IPs, which bot protection (StubHub uses AWS WAF plus other
+# vendors) often blocks. There's no person to solve a check here, so a block just fails the run.
+# Manual trigger only until a few runs have succeeded. The raw captures (screenshots, page HTML)
+# are uploaded either way, so a failure shows exactly what StubHub served.
+
+name: stubhub-collect
+
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: "17 */3 * * *"    # every 3 hours; enable only after manual runs succeed
+
+permissions:
+  contents: read
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install -e .
+
+      - name: Check Chrome is present
+        # ubuntu-latest ships Google Chrome; the config uses browser_channel = "chrome".
+        run: google-chrome --version
+
+      - name: Collect (headed Chrome on a virtual display)
+        # headless=false in config/sources.toml, so give Chrome a display.
+        run: xvfb-run --auto-servernum python -m ticket stubhub collect
+
+      - name: Status
+        if: always()
+        run: python -m ticket status || true
+
+      - name: Upload raw captures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stubhub-raw-${{ github.run_id }}
+          path: |
+            data/raw/
+            data/prices.sqlite
+          if-no-files-found: warn
+          retention-days: 7
