@@ -47,8 +47,12 @@ def capture_views(sources: Sources, raw_dir: Path, **capture_kwargs):
         cards.extend(cap.cards)
         warnings.extend(f"[{name}] {n}" for n in cap.notes if n.startswith("!!"))
         if len(cap.cards) >= PAGE_CAP:
-            warnings.append(f"[{name}] {len(cap.cards)} listings shown, StubHub's apparent per-page limit: "
-                            "there may be more; split this view into smaller ones")
+            if "sortBy=" in url:
+                warnings.append(f"[{name}] {len(cap.cards)} listings shown (StubHub's apparent per-page limit). "
+                                "Sorted cheapest-first, so the cheapest are included; pricier ones may be missing")
+            else:
+                warnings.append(f"[{name}] {len(cap.cards)} listings shown, StubHub's apparent per-page limit, "
+                                "UNSORTED: cheaper listings may be missing; split this view")
     return docs, cards, warnings, None
 
 
