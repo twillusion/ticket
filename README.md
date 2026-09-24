@@ -47,7 +47,19 @@ is used.
 
 StubHub shows only ~10 listings per page load, and blocked the "show more" request in testing.
 So instead of paging, the tool loads a few **filtered views**: one per tier, with those sections
-selected on StubHub's map and sorted by price. Set them up with the guided command:
+selected. StubHub puts the filter in the link (`?sections=276039&ticketClasses=1687`), so the
+tool can build these links itself:
+
+```bash
+python -m ticket stubhub discover
+```
+
+It loads the event once to collect section ids (from listing cards and the seat-map file),
+tests with a few page loads whether one link can hold several sections and whether a sort
+parameter works, then writes `config/stubhub_views.toml`. Sections whose id isn't known yet
+are listed and left out.
+
+Manual fallback, if discover can't work it out:
 
 ```bash
 python -m ticket stubhub setup-views            # all three tiers

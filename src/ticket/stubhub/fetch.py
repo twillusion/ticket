@@ -51,6 +51,7 @@ class Capture:
     network: list[dict] = field(default_factory=list)   # xhr/fetch requests
     scripts: list[dict] = field(default_factory=list)   # inline scripts summary
     cards: list[dict] = field(default_factory=list)     # listing cards read from the DOM
+    svgs: list[tuple[str, str]] = field(default_factory=list)   # (url, text): seat-map files
 
 
 def with_quantity(url: str, quantity: int) -> str:
@@ -237,6 +238,11 @@ def capture_event(cfg: StubHubConfig, raw_dir: Path, *, executable_path: str | N
                     cap.notes.append(f"!! StubHub refused a request ({r.request.method} {r.status}) "
                                      f"{r.url[:120]} -> {snippet}")
                 if not body or len(body) > _MAX_BODY:
+                    continue
+                if "svg" in ctype:
+                    text = body.decode("utf-8", "replace")
+                    cap.svgs.append((r.url, text))
+                    (raw_dir / f"map-{len(cap.svgs)}.svg").write_text(text, encoding="utf-8")
                     continue
                 try:
                     cap.docs.append((r.url, json.loads(body)))

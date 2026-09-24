@@ -14,6 +14,9 @@ from ticket.stubhub.fetch import Blocked, capture_event, load_raw, with_quantity
 from ticket.stubhub.parse import SOURCE, ExtractResult, extract
 
 
+PAGE_CAP = 10   # StubHub showed at most ~10 listings per page load in testing
+
+
 def extract_all(docs, cards, quantity: int, event_url: str) -> tuple[ExtractResult, str]:
     """JSON listings if the page delivered any; otherwise the rendered listing cards."""
     from_json = extract(docs, quantity, event_url)
@@ -43,6 +46,9 @@ def capture_views(sources: Sources, raw_dir: Path, **capture_kwargs):
             c["view"] = name
         cards.extend(cap.cards)
         warnings.extend(f"[{name}] {n}" for n in cap.notes if n.startswith("!!"))
+        if len(cap.cards) >= PAGE_CAP:
+            warnings.append(f"[{name}] {len(cap.cards)} listings shown, StubHub's apparent per-page limit: "
+                            "there may be more; split this view into smaller ones")
     return docs, cards, warnings, None
 
 
